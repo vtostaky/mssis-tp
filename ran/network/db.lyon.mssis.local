@@ -1,0 +1,21 @@
+;
+; BIND data file for local loopback interface
+;
+$TTL    604800
+@   IN  SOA ns.lyon.mssis.local. hostmaster.lyon.mssis.local. (
+                 13     ; Serial
+             604800     ; Refresh
+              86400     ; Retry
+            2419200     ; Expire
+             604800 )   ; Negative Cache TTL
+;
+@   IN  NS  ns.lyon.mssis.local.
+ns  IN  A   10.2.0.254
+r1  IN  NS  ns.r1
+r2  IN  NS  ns.r2
+r3  IN  NS  ns.r3
+r4  IN  NS  ns.r4
+ns.r1   IN  A   10.2.0.1
+ns.r2   IN  A   10.2.0.2
+ns.r3   IN  A   10.2.0.3
+ns.r4   IN  A   10.2.0.4

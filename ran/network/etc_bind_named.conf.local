@@ -1,0 +1,27 @@
+
+zone "local" IN {
+        type master;
+        file "/etc/bind/lyon.mssis.local/db.local";
+        allow-query { any; };
+        notify yes;
+
+};
+
+zone "mssis.local" IN {
+        type master;
+        file "/etc/bind/lyon.mssis.local/db.mssis.local";
+        allow-query { any; };
+        notify yes;
+};
+
+
+zone "lyon.mssis.local" IN {
+    type master;
+    file "/etc/bind/lyon.mssis.local/db.lyon.mssis.local";
+    allow-query { any; };
+    notify yes; 
+
+};
+
+
+
