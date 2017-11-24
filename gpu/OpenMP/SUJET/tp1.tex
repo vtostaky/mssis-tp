@@ -1,0 +1,231 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage{graphicx, subfigure}
+\usepackage{amssymb,amstext,amsmath, array,textpos, url, hyperref, enumerate, listings, colortbl }
+\usepackage{chngpage}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{algorithmic, algorithm}
+\usepackage[french]{babel}
+\usepackage{xcolor}
+\definecolor{graybg}{gray}{0.85}
+\definecolor{graybg2}{gray}{0.90}
+\definecolor{graybg3}{gray}{0.95}
+\pagestyle{plain}
+\bibliographystyle{alpha}
+\usepackage{verbatim}
+
+\def\thesection       {\Roman{section}}
+\def\thesubsection       {\arabic{subsection}}
+
+
+\lstset{extendedchars=false}
+\lstset{language=c}
+\lstset{% general command to set parameter(s)
+		basicstyle=\scriptsize,          % print whole listing small
+		keywordstyle=\color{blue}\bfseries,
+		frameround=tttt,
+		commentstyle=\color{red},
+		frame=single,
+		numbers=left,
+		stringstyle=\ttfamily,      % typewriter type for strings
+			showstringspaces=false}     % no special string spaces
+			%/LISTINGS
+
+% Exercice number
+\newcounter{numexos}%Création d'un compteur qui s`appelle numexos
+\setcounter{numexos}{0}%initialisation du compteur
+\newcommand{\exercice}[1]%
+{%Création d'une macro ayant un paramètre
+  \addtocounter{numexos}{1}%chaque fois que cette macro est appelée, elle ajoute 1 au compteur numexos
+  \paragraph{Q.\thenumexos:}%
+	{#1} %Met en rouge Exercice et la valeur du compteur appelée par \thenumeexos
+}
+
+%Correction
+\newcommand{\sectioncorrection}[1]%
+{
+\ifx\tpcorrection \undefined %
+\else %
+\begin{center}
+\textcolor{red}{Correction} \\
+\fcolorbox{black}{graybg}{
+\begin{minipage}{0.9\textwidth}
+	{\#1} 
+\end{minipage}
+}
+\end{center}
+\fi
+}
+
+% Guillemets
+\newcommand{\ofg}[1]{\og{\#1\fg{}}}
+
+% Correction
+
+% comment out above definition of todo
+
+\newboolean{reponse}
+\setboolean{reponse}{true}
+\ifthenelse{\boolean{reponse}}
+{
+  \newenvironment{correction}
+  {\color{red} \small}
+  {\color{black} \normalsize}
+}{
+\newsavebox{\trashcan}
+\newenvironment{correction}
+  {\begin{lrbox}{\trashcan}}
+  {\end{lrbox}}
+}
+
+\newenvironment{tip}
+	{	\fbox\{\begin{minipage}{1\textwidth} \includegraphics[width=0.8cm]{../tips.png}}
+	{	\end{minipage}\} }
+%  {\vspace{10pt} \begin{fbox} \begin{minipage}{1\textwidth} \includegraphics[width=0.8cm]{../tips.png}}
+%  {\end{minipage}\end{fbox}}
+
+\begin{document}
+
+\changepage{3cm}%amount added to textheight
+{1cm}%amount added to textwidth
+{-1cm}%amount added to evensidemargin
+{-1cm}%amount added to oddsidemargin
+{}%amount added to columnsep
+{-2cm}%amount added to topmargin
+{}%amount added to headheight
+{}%amount added to headsep
+{}%amount added to footskip
+
+
+\vspace{0.1\textheight}
+
+\begin{tabular}{m{0.4\textwidth}m{0.6\textwidth}}
+
+  \begin{center}
+    \includegraphics[width=5.5cm]{logo_esiea.jpg}
+  \end{center}
+
+  &
+
+  \begin{center}
+ 	\LARGE{\textbf{MS-SIS - Programmation GPU}} \\
+	\large{(2017-2019)} \\
+	\Huge{TP1} \\%\large{(1 s\'eance) }\\
+	\Large{OpenMP} \\
+	\large{~}\\
+    	\small{\url{julien.jaeger@cea.fr}
+    	}\\
+
+  \end{center}
+  \\
+\end{tabular}
+
+
+
+Les objectifs de ce TP sont:
+\begin{itemize}
+	\item Compr\'ehension du mod\`ele d\'ex\'ecution
+	\item partage de travail (parcours de tableau)
+	\item parallélisation d'un code casseur de mdp
+\end{itemize}
+
+%%PARTIE I
+\section{Mod\`ele d'ex\'ecution}
+Dans cette partie nous consid\'erons le fichier Ex1/print\_rank\_1.c. \`A tout moment, vous pouvez compiler le fichier et l'ex\'ecuter
+(gcc print\_rank\_1.c -o print\_rank\_1.pgr -fopenmp \&\& OMP\_NUM\_THREADS=8 ./print\_rank\_1.pgr).
+
+% QUESTION 1-1
+\exercice{Ce programme affiche l'identifiant unique (rank) du thread courant parmis tous les threads demandés. Que font les fonctions
+\texttt{omp\_get\_num\_threads()} et \texttt{omp\_get\_thread\_num()}?} 
+
+% CORRECTION 1-1
+\sectioncorrection{ 
+\texttt{omp\_get\_num\_threads()} = nombre de threads dans la région courant.
+ 
+\texttt{omp\_get\_thread\_num()} = identifiant unique (rank) du thread courant.
+}
+
+% QUESTION 1-2
+\exercice{Pour le moment, les appels à ces fonctions et le print ne sont pas dans une région parallèle. Insérer une région parallèle OpenMP avec le pragma \texttt{\#pragma omp parallel}.} 
+
+% CORRECTION 1-2
+\sectioncorrection{.
+}
+
+% QUESTION 1-3
+\exercice{Insérer une barrière OpenMP (\texttt{\#pragma omp barrier} avant le print. Que se passe-t-il? Pourquoi? Comment peut-on corriger le problème?} 
+
+% CORRECTION 1-3
+\sectioncorrection{.
+}
+
+
+%%PARTIE II
+\section{Partage de travail}
+Dans cette partie nous consid\'erons le fichier Ex2/parallel\_for\_1\_manual.c. \`A tout moment, vous pouvez compiler le fichier et l'ex\'ecuter
+(gcc parallel\_for\_1\_manual.c -o parallel\_for\_1\_manual.pgr -fopenmp \&\& OMP\_NUM\_THREADS=6 ./parallel\_for\_1\_manual.pgr).
+
+% QUESTION 2-1
+\exercice{Le programme parcourt un tableau d'entier et réalise la somme de chaque entier. Exécuter-le. Quel est le problème?}
+
+% CORRECTION 2-1
+\sectioncorrection{Chaque thread parcourt et fait la somme de tout le tableau. La somme finale est trop grande.
+}
+
+
+% QUESTION 2-2
+\exercice{Répartir le travail de parcourt de tableau et de somme entre les threads en utilisant le rang du thread. Utiliser une variable temporaire pour stocker la somme partielle, avant de sommer les sommes partielles pour obtenir la valeur finale.
+Penser à protéger la somme finale (avec un atomic ou une section critique).}
+% CORRECTION 2-2
+\sectioncorrection{.
+}
+
+% QUESTION 2-3
+\exercice{Il est possible de répartir automatiquement les itérations d'une boucle entre les différents threads avec le pragma \texttt{\#pragma omp for}. Utiliser ce pragma pour remplacer votre découpage manuel.
+}
+
+% CORRECTION 2-3
+\sectioncorrection{.
+}
+
+% QUESTION 2-4
+\exercice{Au lieu de protéger la somme finale avec une section critique, il est possible de spécifier à une région parallèle (ou une boucle for) qu'une réduction à lieu dans celle-ci. Utiliser cette fonctionnalité.}
+
+% CORRECTION 2-4
+\sectioncorrection{.
+}
+
+% QUESTION 2-5
+\exercice{Il est possible de fusionner les pragmas \texttt{\#pragma omp parallel} et \texttt{\#pragma omp for} en un seul pragma. Supprimer la boucle permettant l'affichage des sommes partielles, et utiliser ce pragma combiné.}
+
+% CORRECTION 2-5
+\sectioncorrection{.
+}
+
+
+%%PARTIE III
+\section{Paralléliser un code casseur de mdp}
+Dans cette partie nous considérons le fichier Ex3/breaker\_for.c. \`A tout moment, vous pouvez compiler le fichier et l'exécuter
+(gcc breaker\_for.c -o breaker\_for.pgr -fopenmp -lm -lcrypt \&\& ./breaker\_for.pgr).
+
+
+% QUESTION 3-1
+\exercice{Le programme fait une recherche gloutonne pour trouver un mot de passe à partir du mot de passe crypté. Pour le moment, le code test toutes les possibilités avec une boucle for.
+Paralléliser cette boucle pour que la recherche soit plus rapide. Ouvrir la page de man de la fonction \texttt{crypt} pour vérifier si celle-ci peut être utilisé en parallèle.}
+
+
+%%PARTIE IV
+\section{DEVOIR MAISON}
+Cette partie est à réaliser pour le prochain cours.
+
+
+% QUESTION 4-1
+\exercice{Ce programme est le même que précédemment, à l'exception qu'il s'arrête dés que le mot de passe est trouvé. Paralléliser ce code avec la même optimisation: dés qu'un thread trouve le mot de passe, il arrête le travail de tous les threads.}
+
+
+
+
+
+
+\end{document}
