@@ -1,0 +1,42 @@
+
+									     INTERNET
+										   	|
+PARIS									   	| serial
+										   	|
+									ROUTEUR 1Eth/1Serial
+											|
+							---------Serveur Windows-------------
+					        |                                   |
+							|                                   |
+			  (12 postes)  HUB-----------           -----------HUB  (12 postes)
+						    |           |   5/24    |           |
+							|	  Routeur 2Eth      |           |
+      (10.1.0.3/24)   Routeur 2Eth      |           |     Routeur 2Eth (10.1.0.4/24)
+					        |           |     Routeur 2Eth      |
+							|           |           |   6/24    |							
+			(12 postes)    HUB-------	-----------<-----------HUB	(12 postes)
+						    |       |               |           |
+							|		-----------------			|
+							|									|
+		(7 admin, 4 info, Switch-------------------------------Switch (7 admin, 4 info,
+			2 marketing)	|									|		2 marketing)
+            +8              |          (10.1.0.0/16)            |	    +8
+       10.1.1.xxx/24 (1-21) --------ROUTEUR 2Eth/1Serial--------- 10.1.2.yyy/24 (1-21)
+									  	  serial
+										    |
+										    |
+										    |
+										    |  WAN
+										    |
+										    |
+										    |
+									      serial
+              10.2.1.254/24 --------ROUTEUR 2Eth/1Serial--------- 10.2.2.254/24
+							|            (10.2.0.0/16)          |
+             3-10 prods     |									|    3-10 prods
+					   \    |									|   /
+						\   |									|  /
+NIMES          2-5 com --Switch                              Switch-- 2-5 com
+						/	|									|  \
+					   /    |									|   \
+            1-5 finance     ----------Serveur Windows------------    1-5 finance

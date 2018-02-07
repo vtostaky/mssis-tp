@@ -1,0 +1,10 @@
+On place un routeur entre 2 hubs pour
+	- créer des sous-réseaux indépendants, mais pouvant communiquer entre eux
+	- éviter les collisions et conflits que généreraient les routeurs associés en série
+
+Un plan d'adressage de classe C (192.168.1.xxx) serait suffisant pour l'entreprise qui aura
+à gérer à terme 80 + 40 = 120 postes.
+Cependant on privilégiera un adressage de classe A 10.aaa.bbb.ccc qui permettra d'utiliser
+le 2e octet pour identifier le site (Paris, Nîmes), le 3e octet pour identifier le sous-réseau,
+et le 4e octet pour le poste lui-même.
+
