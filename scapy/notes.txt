@@ -1,0 +1,58 @@
+MYID = 0x0502
+SRCIP = "1.2.3.4"
+DSTIP = "5.6.7.8"
+DSTMAC= "00:5c:a4:75:ca:47"
+
+0 - Envoi echo-request avec une payload
+srp1(Ether(dst=DSTMAC)/IP(id=MYID, src=SRCIP, dst=DSTIP) / ICMP() / "Vincent Drouin", iface="eth0" )
+
+1 - Envoi echo-reply avec une payload, et un padding qui est la payload inversée
+srp1(Ether(dst=DSTMAC)/IP(id=MYID, src=SRCIP, dst=DSTIP) / ICMP(type=0) / payload / Padding(payload[::-1]) , iface="eth0")
+
+2 - Envoi paquet TCP SYN spoofé avec l'adresse de la cible en source et cible un port ouvert.
+Port 1234 à atteindre.
+srp1(Ether(dst=DSTMAC)/IP(id=MYID, src=DSTIP, dst=DSTIP) / TCP(sport=1234,dport=1234) , iface="eth0")
+
+3 - Paquet UDP null sur port 5353
+rp1(Ether(dst=DSTMAC)/IP(id=MYID, src=SRCIP, dst=DSTIP) / UDP(dport=5353,len=0) , iface="eth0")
+
+4 - UDP message depuis adresse 8.8.8.8, port src 1234, port dest 5678, avec le mot "MAGIC"
+srp1(Ether(dst=DSTMAC)/IP(id=MYID, src="8.8.8.8", dst=DSTIP) / UDP(dport=5678,sport=1234) / "MAGIC" , iface="eth0")
+
+5 - ARP spoofing dest 5.6.7.8 vers 12:12:12:12:12:12 pour 1.2.3.4 / ID positionné sur les 2 derniers bytes de l'@ MAC src
+srp1(Ether(dst=DSTMAC,src="24:be:05:13:05:02")/ARP(op="who-has", psrc=SRCIP, pdst=DSTIP, hwsrc="12:12:12:12:12:12"), iface="eth0")
+
+6 - Envoyer un fragment IP à l'offset 0x48 (après 48 octets), qui ne soit pas le dernier fragment et dont le contenu soit "XXXX"
+pkt = IP(dst=DSTIP,src=SRCIP,id=MYID, frag = 9, flags="MF")/"XXXX"
+sendp(Ether(dst=DSTMAC)/pkt, iface="eth0")
+
+7 - Envoyer requête DNS (IN A) sur serveur secdev.org
+pkt = IP(dst=DSTIP,src=SRCIP,id=MYID)/UDP(dport=53)/DNS(rd=1,qd=DNSQR(qname="secdev.org"))
+sendp(Ether(dst=DSTMAC)/pkt, iface="eth0")
+ 
+8 - envoyer message erreur ICMP host unreachable pour couper côté 5.6.7.8 la
+connexion TCP entre 1.2.3.4:1234 et 5.6.7.8, sachant que le dernier paquet TCP
+envoyé de 5.6.7.8 vers 1.2.3.4 num seq = 555678 et acquittait 111234
+pkt = IP(dst=DSTIP,src=SRCIP,id=MYID)/ICMP(type = 3, seq = 555678,code = 1)/IP(dst=SRCIP,src=DSTIP)/TCP(seq=555678, ack=111234,sport=5678,dport=1234,flags="SA")
+pkt = Ether(raw(Ether(dst=DSTMAC)/pkt))
+
+
+-----------------------------------------------------------------------
+Scan de ports
+pkt = IP(dst="192.168.1.25") / TCP(dport=(1,1024), sport = RandShort())
+ans, unans = sr(pkt, iface="eth0")
+int_ans = ans.filter(lambda sr: TCP not in sr[1] or not sr[1][TCP].flags.RA)
+int_ans.make_table(lambda sr: (sr[0].dst, sr[0].dport,sr[1].sprintf('{TCP:%TCP.flags%}{ICMP:%ICMP.type%}')))
+
+Scan ARP voisinage :
+pkt = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst="192.168.1.0/24")
+ans, unans = srp(pkt, iface="eth0", timeout = 1)
+Affichage trié par IP
+ans.make_table(lambda sr: (sr[1].pdst, sr[1].psrc, sr[1].hwsrc))
+Affichage non trié
+ans.summary(lambda (s,r): r.sprintf("%ARP.psrc% %Ether.src%"))
+
+
+----------------------------------------------------------------------
+WARNING: Mac address to reach destination not found. Using broadcast.
+-> utiliser sendp (srp, srp1) au lieu de send (sr, sr1)
