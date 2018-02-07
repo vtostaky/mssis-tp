@@ -1,0 +1,54 @@
+hostname cat2
+!
+interface Ethernet1
+ no ip address
+ switchport trunk encapsulation dot1q
+ switchport trunk native vlan 300
+ switchport trunk allowed vlan 3,4,5
+ switchport mode trunk
+ switchport nonegotiate
+!
+interface Ethernet2
+ no ip address
+ switchport mode access
+ switchport access vlan 3
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+ switchport port-security aging time 10
+ switchport port-security aging type inactivity
+ switchport nonegotiate
+!
+interface Ethernet3
+ no ip address
+ switchport mode access
+ switchport access vlan 4
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+ switchport port-security aging time 10
+ switchport port-security aging type inactivity
+ switchport nonegotiate
+!
+interface Ethernet4
+ no ip address
+ switchport mode access
+ switchport access vlan 4
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+ switchport port-security aging time 10
+ switchport port-security aging type inactivity
+ switchport nonegotiate
+!
+interface Ethernet5
+ no ip address
+ switchport mode access
+ switchport access vlan 3
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation restrict
+ switchport port-security aging time 10
+ switchport port-security aging type inactivity
+ switchport nonegotiate
+!

@@ -1,0 +1,17 @@
+hostname r1
+
+ip prefix-list bgp-deny seq 10 deny 0.0.0.0/0
+ip prefix-list bgp-deny seq 15 deny 10.0.0.0/8 le 32
+ip prefix-list bgp-deny seq 20 deny 172.16.0.0/12 le 32
+ip prefix-list bgp-deny seq 999 permit 0.0.0.0/0 le 32
+
+interface looopback
+ ip address 10.0.0.1
+
+router bgp 4
+ neighbor 13.0.0.1 remote-as 2
+ neighbor 13.0.0.1 prefix-list bgp-deny in
+ neighbor 13.0.0.1 password secret
+ neighbor 11.0.0.1 remote-as 1
+ neighbor 11.0.0.1 password secret
+!

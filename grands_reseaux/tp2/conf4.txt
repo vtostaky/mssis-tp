@@ -1,0 +1,20 @@
+hostname conf4
+!
+crypto isakmp policy 10
+ encr des
+ hash md5
+ authentication pre-share
+ group 1
+!
+crypto ipsec transform-set chiff_auth esp-3des esp-md5-hmac
+!
+crypto map cipher2 10 ipsec-isakmp
+ set peer ip3
+ set peer ip12
+ match address 120
+!
+interface FastEthernet1
+ ip address ip11
+ crypto map cipher2
+!
+end

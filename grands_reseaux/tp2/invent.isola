@@ -1,0 +1,6 @@
+cat3 Ethernet4 switchport-access 2 isolated
+cat3 Ethernet2 switchport-access 6 isolated
+cat4 Ethernet3 switchport-access 6 isolated
+cat3 Ethernet5 switchport-access 7 isolated
+cat4 Ethernet2 switchport-access 7 isolated
+cat4 Ethernet4 switchport-access 7 isolated

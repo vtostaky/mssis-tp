@@ -1,0 +1,35 @@
+hostname conf1
+!
+crypto isakmp key 4cewao6wcbw83 address 192.168.1.154
+crypto isakmp key pvntl2o9xsra5 address 192.165.1.154
+!
+crypto isakmp policy 10
+ encr 3des
+ hash md5
+ authentication pre-share
+ group 2
+!
+crypto ipsec transform-set chiff_auth esp-3des esp-md5-hmac
+!
+crypto map IPSEC_1_1 10 ipsec-isakmp
+ set peer 192.168.1.154
+ set transform-set chiff_auth
+ match address 110
+!
+crypto map IPSEC_2_1 10 ipsec-isakmp
+ set peer 192.165.1.154
+ set transform-set chiff_auth
+ match address 120
+!
+interface FastEthernet0
+ ip address 192.168.1.1 255.255.255.0
+ crypto map IPSEC_1_1
+!
+interface FastEthernet1
+ ip address 192.165.1.1 255.255.255.0
+ crypto map IPSEC_2_1
+!
+access-list 110 permit ip 10.0.1.0 0.0.0.255 10.0.2.0 0.0.0.255
+access-list 120 permit ip 10.0.3.0 0.0.0.255 10.0.4.0 0.0.0.255
+!
+end

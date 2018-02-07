@@ -1,0 +1,8 @@
+hostname pe2
+!
+ip vrf clientA
+ rd pe2:1
+ route-target export 1
+ route-target import 1
+ maximum routes 100 10
+!

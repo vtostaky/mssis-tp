@@ -1,0 +1,13 @@
+hostname r4
+
+interface looopback
+ ip address 12.0.0.1
+
+router bgp 3
+ neighbor 13.0.0.1 remote-as 2
+ neighbor 13.0.0.1 prefix-list bgp-deny in
+ neighbor 13.0.0.1 password secret
+ neighbor 11.0.0.1 remote-as 1
+ neighbor 11.0.0.2 prefix-list bgp-deny in
+ neighbor 11.0.0.1 password secret
+!

@@ -1,0 +1,11 @@
+hostname r6
+
+interface looopback
+ ip address 13.0.0.2
+
+router bgp 6
+ neighbor 18.0.0.1 password secret
+ neighbor 18.0.0.1 remote-as 8
+ neighbor 18.0.0.1 prefix-list bgp-deny out
+ neighbor 18.0.0.1 password secret
+!

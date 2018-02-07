@@ -1,0 +1,10 @@
+cat1 Ethernet2 switchport-access 3 transported
+cat1 Ethernet5 switchport-access 3 transported
+cat2 Ethernet2 switchport-access 3 transported
+cat2 Ethernet5 switchport-access 3 transported
+cat1 Ethernet3 switchport-access 4 transported
+cat2 Ethernet3 switchport-access 4 transported
+cat2 Ethernet4 switchport-access 4 transported
+cat3 Ethernet3 switchport-access 4 transported
+cat1 Ethernet4 switchport-access 5 transported
+cat4 Ethernet5 switchport-access 5 transported

@@ -1,0 +1,39 @@
+hostname pe1
+!
+ip vrf clientA
+ rd pe1:1
+ route-target export 1
+ route-target import 1
+ route-target export 7
+ route-target import 6
+ maximum routes 100 10
+!
+ip vrf clientB
+ rd pe1:2
+ route-target export 2
+ route-target import 2
+ route-target export 7
+ route-target import 6
+ maximum routes 100 10
+!
+ip vrf clientC
+ rd pe1:3
+ route-target export 3
+ route-target import 3
+ route-target export 7
+ route-target import 6
+ maximum routes 100 10
+!
+ip vrf clientD
+ rd pe1:4
+ route-target export 4
+ route-target import 4
+ maximum routes 100 10
+!
+ip vrf clientE
+ rd pe1:5
+ route-target export 5
+ route-target import 5
+ route-target export 6
+ route-target import 7
+!
