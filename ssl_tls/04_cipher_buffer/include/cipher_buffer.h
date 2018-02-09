@@ -5,6 +5,7 @@
 #define IV_SZ 16
 #define BLOCK_SZ 16
 #define HASH_SZ 32
+#define RSA_SZ 256
 #define MAX_ITER 1000000
 
 /**
@@ -25,19 +26,8 @@ int cipher_buffer(unsigned char **output, int *output_len,
 
 int uncipher_buffer(unsigned char **output, int *output_len,
         unsigned char *input, int input_len,
-        unsigned char *master_key, int key_len,
-        int salt_len);
-
-/**
- * @param [out] key (32 bytes)
- * @param [in]  passwd      user password
- * @param [in]  salt        salt
- * @param [in]  salt_len    salt length in bytes
- * @param [in]  iterations  number of iterations
- * @return      0 if OK, 1 else
- */
-
-int deriv_passwd(unsigned char *key, char* passwd, unsigned char* salt, int salt_len, unsigned int iterations);
+        char *path_pubkey_enc,
+        char *path_privkey_sign);
 
 int gen_alea(unsigned char *alea, int alea_length);
 #endif

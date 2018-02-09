@@ -1,7 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "tools.h"
 
+static void * (* const volatile memset_ptr)(void *, int, size_t) = memset;
+
+void secure_memzero(void * p, size_t len)
+{
+    (memset_ptr)(p, 0, len);
+}
 
 void print_hex(unsigned char* buffer, int length, const char* name)
 {

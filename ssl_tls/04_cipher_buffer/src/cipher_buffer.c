@@ -7,8 +7,6 @@
 #include "mbedtls/aes.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/havege.h"
-#include "mbedtls/ctr_drbg.h"
-#include "mbedtls/entropy.h"
 
 int gen_alea(unsigned char *alea, int alea_length)
 {
@@ -28,54 +26,6 @@ cleanup:
     return ret;
 }
 
-void deriv_masterkey(mbedtls_sha256_context sha256_ctx, unsigned char *master_key, int key_len, int step, unsigned char* res)
-{
-    mbedtls_sha256_starts( &sha256_ctx, 0 );
-    mbedtls_sha256_update( &sha256_ctx, master_key, key_len);
-    mbedtls_sha256_update( &sha256_ctx, (unsigned char*) &step, sizeof(int));
-    mbedtls_sha256_finish( &sha256_ctx, res);
-}
-
-void deriv_step(mbedtls_sha256_context ctx, unsigned char *hash, char* passwd, unsigned char* salt, int salt_len, int step)
-{
-    mbedtls_sha256_starts( &ctx, 0 );
-    if(step != 0)
-        mbedtls_sha256_update( &ctx, hash, HASH_SZ);
-
-    mbedtls_sha256_update( &ctx, (unsigned char*) passwd, strlen(passwd));
-    mbedtls_sha256_update( &ctx, salt, salt_len);
-    mbedtls_sha256_update( &ctx, (unsigned char*) &step, sizeof(int));
-    mbedtls_sha256_finish( &ctx, hash);
-}
-
-int deriv_passwd(unsigned char *key, char* passwd, unsigned char* salt, int salt_len, unsigned int iterations)
-{
-    int ret = 1;
-    int i = 0;
-    unsigned char hash[HASH_SZ];
-    mbedtls_sha256_context ctx;
-
-    if((key == NULL) || (passwd == NULL) || (salt == NULL) || (salt_len <= 0) || (iterations < 1))
-    {
-        goto cleanup;
-    }
-
-    mbedtls_sha256_init( &ctx );
-    
-    deriv_step(ctx, hash, passwd, salt, salt_len, i);
-    
-    for(i = 1; i < iterations ; i++)
-    {
-        deriv_step(ctx, hash, passwd, salt, salt_len, i);
-    }
-    memcpy(key, hash, HASH_SZ);
-    mbedtls_sha256_free( &ctx );
-    ret = 0;
-
-cleanup:
-    return ret;
-}
-
 int cipher_buffer(unsigned char **output, int *output_len,
         unsigned char *input, int input_len,
         char *path_pubkey_enc,
@@ -87,12 +37,12 @@ int cipher_buffer(unsigned char **output, int *output_len,
     
     unsigned char IV[IV_SZ];
     unsigned char aes_key[HASH_SZ];
-    unsigned char* padded_input;
+    unsigned char* padded_input = NULL;
     unsigned char hash[HASH_SZ];
-    unsigned char sig[256];
+    unsigned char sig[RSA_SZ];
+    unsigned char wrap_key[RSA_SZ];
     size_t siglen;
     size_t olen = 0;
-    unsigned char wrap_key[256];
 
     mbedtls_aes_context aes_ctx;
     mbedtls_pk_context rsa_ctx;
@@ -104,29 +54,26 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
  
-    printf("generate IV!\n");
     if(gen_alea(IV, IV_SZ) != 0)
     {   
         printf("Could not generate IV!\n");
         goto cleanup;
     }
 
-    printf("generate as key!\n");
     if(gen_alea(aes_key, HASH_SZ) != 0)
     {   
         printf("Could not generate aes key!\n");
         goto cleanup;
     }
 
-    *output_len = IV_SZ + 256 + padded_input_len + 256;
-    *output = malloc((IV_SZ + 256 + padded_input_len + 256)*sizeof(unsigned char));
+    *output_len = IV_SZ + RSA_SZ + padded_input_len + RSA_SZ;
+    *output = malloc((*output_len)*sizeof(unsigned char));
 
     if(*output == NULL)
         goto cleanup;
 
     memcpy(*output, IV, IV_SZ);
     
-    printf("Padding input!\n");
     padded_input = (unsigned char*)malloc(padded_input_len*sizeof(unsigned char));
     if(padded_input == NULL)
         goto cleanup;
@@ -139,19 +86,17 @@ int cipher_buffer(unsigned char **output, int *output_len,
     
     print_hex(aes_key, HASH_SZ, "AES key");
     mbedtls_aes_init(&aes_ctx);
-    mbedtls_aes_setkey_enc(&aes_ctx, aes_key, 256);
+    mbedtls_aes_setkey_enc(&aes_ctx, aes_key, RSA_SZ);
 
     mbedtls_aes_crypt_cbc( &aes_ctx,
                     MBEDTLS_AES_ENCRYPT,
                     padded_input_len,
                     IV,
                     padded_input,
-                    *output + IV_SZ + 256 );
+                    *output + IV_SZ + RSA_SZ );
     mbedtls_aes_free(&aes_ctx);
 
     //RSA encrypt
-
-    printf("Init rsa!\n");
     mbedtls_pk_init(&rsa_ctx);
 
     if( ( ret = mbedtls_pk_parse_public_keyfile( &rsa_ctx, path_pubkey_enc ) ) != 0 )
@@ -169,22 +114,19 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
 
-    printf("Copy wrap key!\n");
     memcpy(*output + IV_SZ, wrap_key, olen); 
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&rsa_ctx);
 
-    mbedtls_sha256((const unsigned char *)*output, *output_len - 256, hash, 0);    
+    mbedtls_sha256((const unsigned char *)*output, *output_len - RSA_SZ, hash, 0);    
     mbedtls_pk_init(&rsa_ctx);
     
-    printf("Parse private key file!\n");
     if( ( ret = mbedtls_pk_parse_keyfile( &rsa_ctx, path_privkey_sign, NULL ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_keyfile returned -0x%04x\n", -ret );
         goto cleanup;
     }
 
-    printf("Sign!\n");
     if( ( ret = mbedtls_pk_sign( &rsa_ctx, md_type,
              hash, 0,
              sig, &siglen,
@@ -194,80 +136,107 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
 
-    printf("Copy signature!\n");
-    memcpy(*output + *output_len - 256, sig, siglen); 
+    memcpy(*output + *output_len - RSA_SZ, sig, siglen); 
     
     mbedtls_pk_free(&rsa_ctx);
-    free(padded_input);
+    
     ret = 0;
+
 cleanup:
+    secure_memzero(IV, IV_SZ);
+    secure_memzero(aes_key, HASH_SZ);
+    secure_memzero(wrap_key, RSA_SZ);
+    //secure_memzero(sig, RSA_SZ);
+    secure_memzero(hash, HASH_SZ);
+    if(padded_input != NULL)
+        secure_memzero(padded_input, padded_input_len);
+    free(padded_input);
     return ret;
 }
 
 int uncipher_buffer(unsigned char **output, int *output_len,
-        unsigned char *input, int input_len, unsigned char* master_key, int key_len, int salt_len)
+        unsigned char *input, int input_len,
+        char *path_pubkey_enc,
+        char *path_privkey_sign)
 {
     int ret = 1;
     int i;
-
+    
     unsigned char IV[IV_SZ];
     unsigned char aes_key[HASH_SZ];
-    unsigned char hash_key[HASH_SZ];
-    unsigned char hmac_hash[HASH_SZ];
-    unsigned char salt[SALT_SZ];
+    unsigned char hash[HASH_SZ];
+    unsigned char sig[RSA_SZ];
+    unsigned char wrap_key[RSA_SZ];
+    size_t olen = 0;
 
     mbedtls_aes_context aes_ctx;
-    mbedtls_sha256_context sha256_ctx;
-    mbedtls_md_context_t hmac_ctx;
+    mbedtls_pk_context rsa_ctx;
     mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
+    mbedtls_havege_state hs;
 
-    if((output == NULL) || (output_len == NULL) || (master_key == NULL) || (input == NULL) || (input_len < SALT_SZ + IV_SZ + HASH_SZ) || (key_len < 1) || (salt_len < 1))
+    if((output == NULL) || (output_len == NULL) || (input == NULL) || (input_len < 1) || (path_pubkey_enc == NULL) || (path_privkey_sign == NULL))
     {
         goto cleanup;
     }
-    *output_len = input_len - (SALT_SZ + IV_SZ + HASH_SZ);
-
-    *output = (unsigned char*)malloc(*output_len*sizeof(unsigned char*));
     
-    memcpy(salt, input, SALT_SZ);
-    memcpy(IV, input + SALT_SZ, IV_SZ);
+    *output_len = input_len - (IV_SZ + RSA_SZ + RSA_SZ);
+    *output = malloc((*output_len)*sizeof(unsigned char));
+    if(*output == NULL)
+        goto cleanup;
+ 
+    mbedtls_pk_init(&rsa_ctx);
 
-    mbedtls_sha256_init( &sha256_ctx );
-    deriv_masterkey(sha256_ctx, master_key, key_len, 1, hash_key);
-    mbedtls_sha256_free( &sha256_ctx );
-
-    mbedtls_md_init( &hmac_ctx );
-
-    mbedtls_md_setup(&hmac_ctx, mbedtls_md_info_from_type(md_type) , 1); //use hmac
-    mbedtls_md_hmac_starts(&hmac_ctx, hash_key, HASH_SZ);
-    mbedtls_md_hmac_update(&hmac_ctx, (const unsigned char *) input, input_len - HASH_SZ);    
-    mbedtls_md_hmac_finish(&hmac_ctx, hmac_hash);
-
-    if(memcmp(input + input_len - HASH_SZ, hmac_hash, HASH_SZ) != 0)
+    if( ( ret = mbedtls_pk_parse_public_keyfile( &rsa_ctx, path_pubkey_enc ) ) != 0 )
     {
-        printf("Hash integrity failure!!\n");
+        printf( " failed\n  ! mbedtls_pk_parse_public_keyfile returned -0x%04x\n", -ret );
         goto cleanup;
     }
     
-    mbedtls_md_free(&hmac_ctx);
+    mbedtls_sha256(input, input_len - RSA_SZ, hash, 0);    
+    if( ( ret = mbedtls_pk_verify( &rsa_ctx, md_type,
+             hash, 0,
+             sig, RSA_SZ)) != 0)
+    {
+        printf( " failed\n  ! mbedtls_pk_verify returned -0x%04x\n", -ret );
+        goto cleanup;
+    }
+    mbedtls_pk_free(&rsa_ctx);
 
-    mbedtls_sha256_init( &sha256_ctx );
-    deriv_masterkey(sha256_ctx, master_key, key_len, 0, aes_key);
-    mbedtls_sha256_free( &sha256_ctx );
+    memcpy(IV, input, IV_SZ);
     
+    mbedtls_pk_init(&rsa_ctx);
+    memcpy(wrap_key, input + IV_SZ, RSA_SZ);
+    
+    if( ( ret = mbedtls_pk_parse_keyfile( &rsa_ctx, path_privkey_sign, NULL ) ) != 0 )
+    {
+        printf( " failed\n  ! mbedtls_pk_parse_keyfile returned -0x%04x\n", -ret );
+        goto cleanup;
+    }
+    
+    mbedtls_havege_init( &hs );
+    if( ( ret = mbedtls_pk_decrypt( &rsa_ctx, wrap_key, sizeof(wrap_key),
+                    aes_key, &olen, HASH_SZ,
+                    mbedtls_havege_random, &hs ) ) != 0 )
+    {
+        printf( " failed\n  ! mbedtls_pk_decrypt returned -0x%04x\n", -ret );
+        goto cleanup;
+    }
+
+    mbedtls_havege_free( &hs );
+    mbedtls_pk_free(&rsa_ctx);
+
+    print_hex(aes_key, HASH_SZ, "AES key");
     mbedtls_aes_init(&aes_ctx);
-    mbedtls_aes_setkey_dec(&aes_ctx, aes_key, 256);
+    mbedtls_aes_setkey_dec(&aes_ctx, aes_key, RSA_SZ);
 
-    print_hex(aes_key, HASH_SZ, "AES KEY");
-    
     mbedtls_aes_crypt_cbc( &aes_ctx,
                     MBEDTLS_AES_DECRYPT,
-                    input_len - SALT_SZ - IV_SZ - HASH_SZ,
+                    *output_len,
                     IV,
-                    input + SALT_SZ + IV_SZ,
-                    *output);
+                    input + IV_SZ + RSA_SZ,
+                    *output );
     mbedtls_aes_free(&aes_ctx);
-
+    
     for(i = *output_len; i > 0; i--)
     {
         if((*output)[i-1] == 0x80)
@@ -280,5 +249,10 @@ int uncipher_buffer(unsigned char **output, int *output_len,
 
     ret = 0;
 cleanup:
+    secure_memzero(IV, IV_SZ);
+    secure_memzero(aes_key, HASH_SZ);
+    secure_memzero(wrap_key, RSA_SZ);
+    secure_memzero(sig, RSA_SZ);
+    secure_memzero(hash, HASH_SZ);
     return ret;
 }
