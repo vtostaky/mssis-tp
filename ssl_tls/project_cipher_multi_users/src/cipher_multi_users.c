@@ -27,74 +27,77 @@ cleanup:
     return ret;
 }
 
-int cipher_buffer(unsigned char **output, int *output_len,
-        unsigned char *input, int input_len,
-        char *path_pubkey_enc,
-        char *path_privkey_sign)
+int cipher_buffer(char *path_input_file, char *path_output_file, char *path_pubkey_enc, char *path_privkey_sign)
 {
     int ret = 1;
     int i;
-    int padded_input_len =(input_len/BLOCK_SZ + 1)*BLOCK_SZ;
     
     unsigned char IV[IV_SZ];
     unsigned char aes_key[HASH_SZ];
-    unsigned char* padded_input = NULL;
     unsigned char hash[HASH_SZ];
     unsigned char sig[RSA_SZ];
     unsigned char wrap_key[RSA_SZ];
+    
+    unsigned char* output = NULL;
+    unsigned char* padded_input = NULL;
+    int input_len = 0;
+    int padded_input_len;
+    int end_of_file = 0;
+
+    FILE *input_file = NULL;
+    FILE *output_file = NULL;
 
     mbedtls_aes_context aes_ctx;
+    mbedtls_sha256_context sha256_ctx;
     mbedtls_rsa_context *rsa_ctx;
     mbedtls_pk_context pk_ctx;
     mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
     mbedtls_havege_state hs;
 
-    if((output == NULL) || (output_len == NULL) || (input == NULL) || (input_len < 1) || (path_pubkey_enc == NULL) || (path_privkey_sign == NULL))
+    if((path_output_file == NULL) || (path_input_file == NULL) || (path_pubkey_enc == NULL) || (path_privkey_sign == NULL))
     {
         goto cleanup;
     }
- 
+
+    input_file = fopen ( path_input_file , "rb" );
+    if (input_file==NULL)
+    {
+        printf ("Input file open error\n");
+        goto cleanup;
+    }
+    
+    output_file = fopen ( path_output_file , "wb" );
+    if (output_file==NULL)
+    {
+        printf ("Output file open error\n");
+        goto cleanup;
+    }
+    
+    mbedtls_sha256_init( &sha256_ctx );
+    mbedtls_sha256_starts( &sha256_ctx, 0 );
+
     if(gen_alea(IV, IV_SZ) != 0)
     {   
         printf("Could not generate IV!\n");
         goto cleanup;
     }
+    
+    ret = fwrite (IV , sizeof(char), IV_SZ, output_file);
+    if(ret != IV_SZ)
+    {
+        ret = -1;
+        printf("Error while writing IV to output file\n");
+        goto cleanup;
+    }
+    mbedtls_sha256_update( &sha256_ctx, IV, IV_SZ);
 
     if(gen_alea(aes_key, HASH_SZ) != 0)
     {   
         printf("Could not generate aes key!\n");
         goto cleanup;
     }
-
-    *output_len = IV_SZ + RSA_SZ + padded_input_len + RSA_SZ;
-    *output = malloc((*output_len)*sizeof(unsigned char));
-
-    if(*output == NULL)
-        goto cleanup;
-
-    memcpy(*output, IV, IV_SZ);
-    
-    padded_input = (unsigned char*)malloc(padded_input_len*sizeof(unsigned char));
-    if(padded_input == NULL)
-        goto cleanup;
-    memcpy(padded_input, input, input_len);
-    padded_input[input_len] = 0x80;
-    for(i = input_len + 1; i < padded_input_len; i++)
-    {
-        padded_input[i] = 0;
-    }
     
     print_hex(aes_key, HASH_SZ, "AES key");
-    mbedtls_aes_init(&aes_ctx);
-    mbedtls_aes_setkey_enc(&aes_ctx, aes_key, 256);
-
-    mbedtls_aes_crypt_cbc( &aes_ctx,
-                    MBEDTLS_AES_ENCRYPT,
-                    padded_input_len,
-                    IV,
-                    padded_input,
-                    *output + IV_SZ + RSA_SZ );
-    mbedtls_aes_free(&aes_ctx);
 
     //RSA encrypt
     mbedtls_pk_init(&pk_ctx);
@@ -124,11 +127,64 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
 
-    memcpy(*output + IV_SZ, wrap_key, RSA_SZ); 
+    ret = fwrite (wrap_key , sizeof(char), RSA_SZ, output_file);
+    if(ret != RSA_SZ)
+    {
+        ret = -1;
+        printf("Error while writing wrap key to output file\n");
+        goto cleanup;
+    }
+    mbedtls_sha256_update( &sha256_ctx, wrap_key, RSA_SZ);
+    
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&pk_ctx);
+    
+    padded_input = malloc(MAX_READ_SIZE*sizeof(unsigned char));
+    if(padded_input == NULL)
+        goto cleanup;
+    
+    output = malloc(MAX_READ_SIZE*sizeof(unsigned char));
+    if(output == NULL)
+        goto cleanup;
 
-    mbedtls_sha256((const unsigned char *)*output, *output_len - RSA_SZ, hash, 0);    
+    mbedtls_aes_init(&aes_ctx);
+    mbedtls_aes_setkey_enc(&aes_ctx, aes_key, 256);
+
+    while(!end_of_file)
+    {
+        // copy 8kB file part into input buffer:
+        input_len = fread (padded_input, sizeof(char), MAX_READ_SIZE, input_file);
+        if (input_len < MAX_READ_SIZE)
+        {
+            padded_input_len = (input_len / BLOCK_SZ + 1) * BLOCK_SZ;
+            padded_input[input_len] = 0x80;
+            for(i = input_len + 1; i < padded_input_len; i++)
+            {
+                padded_input[i] = 0;
+            }
+            end_of_file = 1;
+        }
+        else
+            padded_input_len = MAX_READ_SIZE;
+        
+        mbedtls_aes_crypt_cbc( &aes_ctx,
+                MBEDTLS_AES_ENCRYPT,
+                padded_input_len,
+                IV,
+                padded_input,
+                output );
+        ret = fwrite (output , sizeof(char), padded_input_len, output_file);
+        if(ret != padded_input_len)
+        {
+            ret = -1;
+            printf("Error while writing encrypted buffer to output file\n");
+            goto cleanup;
+        }
+        mbedtls_sha256_update( &sha256_ctx, output, padded_input_len);
+    } 
+    mbedtls_sha256_finish( &sha256_ctx, hash);
+    mbedtls_sha256_free(&sha256_ctx);
+    mbedtls_aes_free(&aes_ctx);
 
     mbedtls_pk_init(&pk_ctx);
     
@@ -154,7 +210,13 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
 
-    memcpy(*output + *output_len - RSA_SZ, sig, RSA_SZ); 
+    ret = fwrite (sig , sizeof(char), RSA_SZ, output_file);
+    if(ret != RSA_SZ)
+    {
+        ret = 1;
+        printf("Error while writing signature to output file\n");
+        goto cleanup;
+    }
     
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&pk_ctx);
@@ -167,16 +229,20 @@ cleanup:
     secure_memzero(wrap_key, RSA_SZ);
     //secure_memzero(sig, RSA_SZ);
     secure_memzero(hash, HASH_SZ);
+    if(input_file != NULL)
+        fclose(input_file);
+    if(output_file != NULL)
+        fclose(output_file);
     if(padded_input != NULL)
-        secure_memzero(padded_input, padded_input_len);
+        secure_memzero(padded_input, MAX_READ_SIZE);
     free(padded_input);
+    if(output != NULL)
+        secure_memzero(output, MAX_READ_SIZE);
+    free(output);
     return ret;
 }
 
-int uncipher_buffer(unsigned char **output, int *output_len,
-        unsigned char *input, int input_len,
-        char *path_pubkey_sign,
-        char *path_privkey_dec)
+int uncipher_buffer(char *path_input_file, char * path_output_file, char *path_pubkey_sign, char *path_privkey_dec)
 {
     int ret = 1;
     int i;
@@ -188,22 +254,68 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     unsigned char wrap_key[RSA_SZ];
     size_t olen = 0;
 
+    FILE* input_file = NULL;
+    FILE* output_file = NULL;
+    int input_len = 0;
+    int read_input_len = 0;
+    int total_read = 0;
+    int output_len = 0;
+    unsigned char* input = NULL;
+    unsigned char* output = NULL;
+
     mbedtls_aes_context aes_ctx;
+    mbedtls_sha256_context sha256_ctx;
     mbedtls_pk_context pk_ctx;
     mbedtls_rsa_context *rsa_ctx;
     mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
     mbedtls_havege_state hs;
 
-    if((output == NULL) || (output_len == NULL) || (input == NULL) || (input_len < 1) || (path_pubkey_sign == NULL) || (path_privkey_dec == NULL))
+    if((path_output_file == NULL) || (path_input_file == NULL) || (path_pubkey_sign == NULL) || (path_privkey_dec == NULL))
     {
         goto cleanup;
     }
     
-    *output_len = input_len - (IV_SZ + RSA_SZ + RSA_SZ);
-    *output = malloc((*output_len)*sizeof(unsigned char));
-    if(*output == NULL)
+    input_file = fopen ( path_input_file , "rb" );
+    if (input_file==NULL)
+    {
+        printf ("Input file open error\n");
         goto cleanup;
- 
+    }
+    
+    output_file = fopen ( path_output_file , "wb" );
+    if (output_file==NULL)
+    {
+        printf ("Output file open error\n");
+        goto cleanup;
+    }
+
+    // Input file size
+    fseek (input_file , 0 , SEEK_END);
+    input_len = ftell (input_file);
+
+    if(input_len < 2*RSA_SZ + IV_SZ + BLOCK_SZ)
+    {
+        printf("Invalid input file\n");
+        goto cleanup;
+    }
+
+    input = malloc(MAX_READ_SIZE*sizeof(unsigned char));
+    if(input == NULL)
+        goto cleanup;
+    
+    output = malloc(MAX_READ_SIZE*sizeof(unsigned char));
+    if(output == NULL)
+        goto cleanup;
+
+    //Set position to signature
+    fseek ( input_file , input_len - RSA_SZ , SEEK_SET );
+    ret = fread(sig, sizeof(char), RSA_SZ, input_file); 
+    if (ret != RSA_SZ)
+    {
+        printf ("Signature read error\n");
+        goto cleanup;
+    }
+
     mbedtls_pk_init(&pk_ctx);
 
     if( ( ret = mbedtls_pk_parse_public_keyfile( &pk_ctx, path_pubkey_sign ) ) != 0 )
@@ -222,8 +334,25 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     }
 
     mbedtls_havege_init( &hs );
-    mbedtls_sha256(input, input_len - RSA_SZ, hash, 0); 
-    memcpy(sig, input + input_len - RSA_SZ, RSA_SZ); 
+    
+    rewind (input_file);
+    mbedtls_sha256_init( &sha256_ctx );
+    mbedtls_sha256_starts( &sha256_ctx, 0 );
+
+    while(total_read < input_len - RSA_SZ)
+    {
+        // copy 8kB file part into input buffer:
+        read_input_len = fread (input, sizeof(char), MAX_READ_SIZE, input_file);
+        total_read += read_input_len;
+        
+        if(total_read > input_len - RSA_SZ)
+            read_input_len -= (total_read - (input_len - RSA_SZ));
+
+        mbedtls_sha256_update( &sha256_ctx, input, read_input_len);
+    } 
+    mbedtls_sha256_finish( &sha256_ctx, hash);
+    mbedtls_sha256_free(&sha256_ctx);
+    
     if( ( ret = mbedtls_rsa_rsassa_pss_verify( rsa_ctx, mbedtls_havege_random, &hs, MBEDTLS_RSA_PUBLIC, md_type, 32, hash, sig ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_rsa_rsassa_pss_verify returned -0x%0x\n\n", -ret );
@@ -232,10 +361,23 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&pk_ctx);
 
-    memcpy(IV, input, IV_SZ);
+    rewind (input_file);
+    ret = fread(IV, sizeof(char), IV_SZ, input_file); 
+    if (ret != IV_SZ)
+    {
+        ret = -1;
+        printf ("IV read error\n");
+        goto cleanup;
+    }
     
     mbedtls_pk_init(&pk_ctx);
-    memcpy(wrap_key, input + IV_SZ, RSA_SZ);
+    ret = fread(wrap_key, sizeof(char), RSA_SZ, input_file); 
+    if (ret != RSA_SZ)
+    {
+        ret = -1;
+        printf ("wrap key read error\n");
+        goto cleanup;
+    }
     
     if( ( ret = mbedtls_pk_parse_keyfile( &pk_ctx, path_privkey_dec, NULL ) ) != 0 )
     {
@@ -269,24 +411,49 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     mbedtls_aes_init(&aes_ctx);
     mbedtls_aes_setkey_dec(&aes_ctx, aes_key, RSA_SZ);
 
-    mbedtls_aes_crypt_cbc( &aes_ctx,
-                    MBEDTLS_AES_DECRYPT,
-                    *output_len,
-                    IV,
-                    input + IV_SZ + RSA_SZ,
-                    *output );
+    total_read = 0;
+    while(total_read < input_len - (2*RSA_SZ+IV_SZ))
+    {
+        secure_memzero(output, MAX_READ_SIZE);
+        // copy 8kB file part into input buffer:
+        read_input_len = fread (input, sizeof(char), MAX_READ_SIZE, input_file);
+        total_read += read_input_len;
+        
+        if(total_read > input_len - (2*RSA_SZ+IV_SZ))
+            read_input_len -= (total_read - (input_len - (2*RSA_SZ+IV_SZ)));
+        
+        mbedtls_aes_crypt_cbc( &aes_ctx,
+                MBEDTLS_AES_DECRYPT,
+                read_input_len,
+                IV,
+                input,
+                output );
+
+        if(total_read > input_len - (2*RSA_SZ+IV_SZ))
+        {
+            for(i = read_input_len; i > 0; i--)
+            {
+                if(output[i-1] == 0x80)
+                {
+                    output_len = i-1;
+                    break;
+                }
+            }
+        }
+        else
+            output_len = read_input_len;
+
+        ret = fwrite ( output, sizeof(char), output_len, output_file);
+        if(ret != output_len)
+        {
+            ret = -1;
+            printf("Error while writing unciphered to output file\n");
+            goto cleanup;
+        }
+
+    }
     mbedtls_aes_free(&aes_ctx);
     
-    for(i = *output_len; i > 0; i--)
-    {
-        if((*output)[i-1] == 0x80)
-        {
-            (*output)[i-1] = 0;
-            *output_len = i;
-            break;
-        }
-    }
-
     ret = 0;
 cleanup:
     secure_memzero(IV, IV_SZ);
@@ -294,5 +461,15 @@ cleanup:
     secure_memzero(wrap_key, RSA_SZ);
     secure_memzero(sig, RSA_SZ);
     secure_memzero(hash, HASH_SZ);
+    if(input_file != NULL)
+        fclose(input_file);
+    if(output_file != NULL)
+        fclose(output_file);
+    if(input != NULL)
+        secure_memzero(input, MAX_READ_SIZE);
+    free(input);
+    if(output != NULL)
+        secure_memzero(output, MAX_READ_SIZE);
+    free(output);
     return ret;
 }

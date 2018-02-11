@@ -7,6 +7,7 @@
 #define HASH_SZ 32
 #define RSA_SZ 256
 #define MAX_ITER 1000000
+#define MAX_READ_SIZE 8192
 
 /**
  * @param [out] output      ciphered buffer
@@ -19,13 +20,9 @@
  * @param [in]  salt_len    salt length in bytes
  * @return      0 if OK, 1 else
  */
-int cipher_buffer(unsigned char **output, int *output_len,
-        unsigned char *input, int input_len,
-        char *path_pubkey_enc,
-        char *path_privkey_sign);
+int cipher_buffer(char *path_input_file, char *path_output_file, char *path_pubkey_enc, char *path_privkey_sign);
 
-int uncipher_buffer(unsigned char **output, int *output_len,
-        unsigned char *input, int input_len,
+int uncipher_buffer(char *path_input_file, char *path_output_file,
         char *path_pubkey_enc,
         char *path_privkey_sign);
 
