@@ -27,7 +27,53 @@ cleanup:
     return ret;
 }
 
-int cipher_buffer(char *path_input_file, char *path_output_file, char *path_pubkey_enc, char *path_privkey_sign)
+int cipher_user_key(FILE *output_file, char *path_pukey_user,
+        unsigned char *aes_key, mbedtls_sha256_context sha256_ctx)
+{
+    mbedtls_pk_context pk_ctx;
+    
+    mbedtls_sha256((const unsigned char *)*output, *output_len - RSA_SZ, hash, 0);    
+
+    //RSA encrypt
+    mbedtls_pk_init(&pk_ctx);
+
+    if( ( ret = mbedtls_pk_parse_public_keyfile( &pk_ctx, path_pubkey_user ) ) != 0 )
+    {
+        printf( " failed\n  ! mbedtls_pk_parse_public_keyfile returned -0x%04x\n", -ret );
+        goto cleanup;
+    }
+    
+    rsa_ctx = mbedtls_pk_rsa(pk_ctx);
+    mbedtls_rsa_set_padding( rsa_ctx, MBEDTLS_RSA_PKCS_V21, md_type );
+    
+    if( ( ret = mbedtls_rsa_check_pubkey( rsa_ctx ) ) != 0 )
+    {
+        printf( " failed\n  ! mbedtls_rsa_check_pubkey failed with -0x%0x\n", -ret );
+        goto cleanup;
+    }
+
+    mbedtls_havege_init( &hs );
+    ret = mbedtls_rsa_rsaes_oaep_encrypt( rsa_ctx, mbedtls_havege_random,
+            &hs, MBEDTLS_RSA_PUBLIC, NULL, 0,
+            HASH_SZ, aes_key, wrap_key );
+    if( ret != 0 )
+    {
+        printf( " failed\n  ! mbedtls_rsa_aes_oaep_encrypt returned %d\n\n", ret );
+        goto cleanup;
+    }
+
+    ret = fwrite (wrap_key , sizeof(char), RSA_SZ, output_file);
+    if(ret != RSA_SZ)
+    {
+        ret = -1;
+        printf("Error while writing wrap key to output file\n");
+        goto cleanup;
+    }
+}
+
+int cipher_buffer(char *path_input_file, char *path_output_file,
+        char *path_pubkey_enc, char *path_privkey_sign,
+        char **paths_pukey_users, int nb_users)
 {
     int ret = 1;
     int i;
@@ -54,7 +100,9 @@ int cipher_buffer(char *path_input_file, char *path_output_file, char *path_pubk
     mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
     mbedtls_havege_state hs;
 
-    if((path_output_file == NULL) || (path_input_file == NULL) || (path_pubkey_enc == NULL) || (path_privkey_sign == NULL))
+    if((path_output_file == NULL) || (path_input_file == NULL) ||
+            (path_pubkey_enc == NULL) || (path_privkey_sign == NULL) ||
+            (paths_pukey_users == NULL))
     {
         goto cleanup;
     }
