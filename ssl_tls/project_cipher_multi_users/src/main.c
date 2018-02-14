@@ -8,15 +8,21 @@ int main(int argc, char **argv)
 {
     int ret = -1;
 
-    char *input = "/home/vdrouin/tp/ssl_tls/vincentdrouin.pdf";
-    char *output = "/home/vdrouin/tp/ssl_tls/ciphered";
-    char *rsa_pub = "/home/vdrouin/tp/ssl_tls/rsa_pub.pem";
-    char *rsa_priv = "/home/vdrouin/tp/ssl_tls/rsa.pem";
+    //char *input = "/home/vdrouin/tp/ssl_tls/vincentdrouin.pdf";
+    //char *output = "/home/vdrouin/tp/ssl_tls/ciphered";
+    //char *rsa_pub = "/home/vdrouin/tp/ssl_tls/rsa_pub.pem";
+    //char *rsa_priv = "/home/vdrouin/tp/ssl_tls/rsa.pem";
 
-    if(cipher_buffer(input, output, rsa_priv, &rsa_pub, 1) == 0)
+    char *input = "/Users/vdrouin/mssis/mssis-tp/ssl_tls/cb.mp3";
+    char *ciphered = "/Users/vdrouin/mssis/mssis-tp/ssl_tls/ciphered";
+    char *unciphered = "/Users/vdrouin/mssis/mssis-tp/ssl_tls/unciphered";
+    char *rsa_pub = "/Users/vdrouin/mssis/mssis-tp/ssl_tls/rsa_pub.pem";
+    char *rsa_priv = "/Users/vdrouin/mssis/mssis-tp/ssl_tls/rsa.pem";
+
+    if(cipher_buffer(input, ciphered, rsa_priv, &rsa_pub, 1) == 0)
     {
         printf("Encryption complete \n");
-        if(uncipher_buffer("/Users/vdrouin/mssis/mssis-tp/ssl_tls/ciphered", "/Users/vdrouin/mssis/mssis-tp/ssl_tls/unciphered", "/Users/vdrouin/mssis/mssis-tp/ssl_tls/rsa_pub.pem", "/Users/vdrouin/mssis/mssis-tp/ssl_tls/rsa.pem") == 0)
+        if(uncipher_buffer(ciphered, unciphered, rsa_pub, rsa_priv, rsa_pub) == 0)
         {
             printf("Decryption completed \n");
         }

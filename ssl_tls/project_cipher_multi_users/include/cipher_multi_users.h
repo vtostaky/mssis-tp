@@ -24,8 +24,9 @@ int cipher_buffer(char *path_input_file, char *path_output_file,
         char *path_privkey_sign, char **paths_pukey_users, int nb_users);
 
 int uncipher_buffer(char *path_input_file, char *path_output_file,
-        char *path_pubkey_enc,
-        char *path_privkey_sign);
+        char *path_pubkey_user,
+        char *path_privkey_user,
+        char *path_pubkey_sign);
 
 int gen_alea(unsigned char *alea, int alea_length);
 #endif
