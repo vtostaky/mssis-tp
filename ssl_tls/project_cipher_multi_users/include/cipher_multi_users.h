@@ -20,7 +20,8 @@
  * @param [in]  salt_len    salt length in bytes
  * @return      0 if OK, 1 else
  */
-int cipher_buffer(char *path_input_file, char *path_output_file, char *path_pubkey_enc, char *path_privkey_sign);
+int cipher_buffer(char *path_input_file, char *path_output_file,
+        char *path_privkey_sign, char **paths_pukey_users, int nb_users);
 
 int uncipher_buffer(char *path_input_file, char *path_output_file,
         char *path_pubkey_enc,
