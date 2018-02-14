@@ -44,10 +44,8 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
 
     char c = 0x00;
 
-    if(output_file == NULL)
-        goto cleanup;
-
-    if(pubBuffer == NULL)
+    if((output_file == NULL)||(pubBuffer == NULL)||(path_pubkey_user == NULL)||
+            (aes_key == NULL) || (sha256_ctx == NULL))
         goto cleanup;
 
     //RSA encrypt
@@ -334,13 +332,11 @@ int find_wrap_key_in_buffer(FILE *input_file, char *path_pubkey_user, long int *
     int ret = -1;
     mbedtls_pk_context pk_ctx;
     
+    if((input_file == NULL)||(pubBuffer == NULL)||(path_pubkey_user == NULL)||
+            (wrap_pos == NULL)||(iv_pos == NULL))
+        goto cleanup;
+    
     rewind(input_file);
-
-    if(input_file == NULL)
-        goto cleanup;
-
-    if(pubBuffer == NULL)
-        goto cleanup;
 
     //RSA encrypt
     mbedtls_pk_init(&pk_ctx);
