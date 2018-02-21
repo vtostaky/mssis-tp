@@ -40,13 +40,15 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
     
     unsigned char hash[HASH_SZ];
     unsigned char wrap_key[RSA_SZ];
-    unsigned char *pubBuffer = (unsigned char*)malloc(2048*sizeof(char));
+    unsigned char *pubBuffer = (unsigned char*)malloc(RSA_SZ*8*sizeof(unsigned char));
 
     char c = 0x00;
 
     if((output_file == NULL)||(pubBuffer == NULL)||(path_pubkey_user == NULL)||
             (aes_key == NULL) || (sha256_ctx == NULL))
         goto cleanup;
+    
+    secure_memzero(pubBuffer, RSA_SZ*8);
 
     //RSA encrypt
     mbedtls_pk_init(&pk_ctx);
@@ -57,7 +59,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
         goto cleanup;
     }
     
-    ret = mbedtls_pk_write_pubkey_pem( &pk_ctx, pubBuffer, 2048);
+    ret = mbedtls_pk_write_pubkey_pem( &pk_ctx, pubBuffer, RSA_SZ*8);
     if( ret != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_write_pubkey_pem failed with -0x%0x\n", -ret );
@@ -73,7 +75,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
     }
     mbedtls_sha256_update( sha256_ctx, (unsigned char*)&c, 1);
 
-    mbedtls_sha256((const unsigned char *)pubBuffer, 2048, hash, 0);    
+    mbedtls_sha256((const unsigned char *)pubBuffer, RSA_SZ*8, hash, 0);    
     ret = fwrite (hash , sizeof(char), HASH_SZ, output_file);
     if(ret != HASH_SZ)
     {
@@ -118,12 +120,12 @@ cleanup:
     secure_memzero(hash, HASH_SZ);
     secure_memzero(wrap_key, RSA_SZ);
     if(pubBuffer != NULL)
-        secure_memzero(pubBuffer, 2048);
+        secure_memzero(pubBuffer, RSA_SZ*8);
     free(pubBuffer);
     return ret;
 }
 
-int cipher_buffer(char *path_input_file, char *path_output_file,
+int cipher_file(char *path_input_file, char *path_output_file,
         char *path_privkey_sign, char **paths_pubkey_users, int nb_users)
 {
     int ret = 1;
@@ -174,10 +176,12 @@ int cipher_buffer(char *path_input_file, char *path_output_file,
     padded_input = malloc(MAX_READ_SIZE*sizeof(unsigned char));
     if(padded_input == NULL)
         goto cleanup;
+    secure_memzero(padded_input, MAX_READ_SIZE);
     
     output = malloc(MAX_READ_SIZE*sizeof(unsigned char));
     if(output == NULL)
         goto cleanup;
+    secure_memzero(output, MAX_READ_SIZE);
 
     
     mbedtls_sha256_init( &sha256_ctx );
@@ -322,12 +326,12 @@ cleanup:
     return ret;
 }
 
-int find_wrap_key_in_buffer(FILE *input_file, char *path_pubkey_user, long int *wrap_pos, long int *iv_pos)
+int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wrap_pos, long int *iv_pos)
 {
     unsigned char hash_from_key[HASH_SZ];
     unsigned char hash_from_buffer[HASH_SZ];
     unsigned char wrap_key[RSA_SZ];
-    unsigned char *pubBuffer = (unsigned char*)malloc(2048*sizeof(char));
+    unsigned char *pubBuffer = (unsigned char*)malloc(RSA_SZ*8*sizeof(unsigned char));
     char c;
     int ret = -1;
     mbedtls_pk_context pk_ctx;
@@ -335,6 +339,7 @@ int find_wrap_key_in_buffer(FILE *input_file, char *path_pubkey_user, long int *
     if((input_file == NULL)||(pubBuffer == NULL)||(path_pubkey_user == NULL)||
             (wrap_pos == NULL)||(iv_pos == NULL))
         goto cleanup;
+    secure_memzero(pubBuffer, RSA_SZ*8);
     
     rewind(input_file);
 
@@ -347,7 +352,7 @@ int find_wrap_key_in_buffer(FILE *input_file, char *path_pubkey_user, long int *
         goto cleanup;
     }
     
-    ret = mbedtls_pk_write_pubkey_pem( &pk_ctx, pubBuffer, 2048);
+    ret = mbedtls_pk_write_pubkey_pem( &pk_ctx, pubBuffer, RSA_SZ*8);
     if( ret != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_write_pubkey_pem failed with -0x%0x\n", -ret );
@@ -355,7 +360,7 @@ int find_wrap_key_in_buffer(FILE *input_file, char *path_pubkey_user, long int *
     }
     mbedtls_pk_free(&pk_ctx);
     
-    mbedtls_sha256((const unsigned char *)pubBuffer, 2048, hash_from_key, 0);    
+    mbedtls_sha256((const unsigned char *)pubBuffer, RSA_SZ*8, hash_from_key, 0);    
 
     while(1)
     {
@@ -406,12 +411,12 @@ cleanup:
     secure_memzero(hash_from_key, HASH_SZ);
     secure_memzero(hash_from_buffer, HASH_SZ);
     if(pubBuffer != NULL)
-        secure_memzero(pubBuffer, 2048);
+        secure_memzero(pubBuffer, RSA_SZ*8);
     free(pubBuffer);
     return ret;
 }
 
-int uncipher_buffer(char *path_input_file, char *path_output_file,
+int uncipher_file(char *path_input_file, char *path_output_file,
         char *path_pubkey_user, char *path_privkey_user,
         char *path_pubkey_sign)
 {
@@ -477,10 +482,12 @@ int uncipher_buffer(char *path_input_file, char *path_output_file,
     input = malloc(MAX_READ_SIZE*sizeof(unsigned char));
     if(input == NULL)
         goto cleanup;
+    secure_memzero(input, MAX_READ_SIZE);
     
     output = malloc(MAX_READ_SIZE*sizeof(unsigned char));
     if(output == NULL)
         goto cleanup;
+    secure_memzero(output, MAX_READ_SIZE);
 
     //Set position to signature
     fseek ( input_file , input_len - RSA_SZ , SEEK_SET );
@@ -536,7 +543,7 @@ int uncipher_buffer(char *path_input_file, char *path_output_file,
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&pk_ctx);
 
-    ret = find_wrap_key_in_buffer(input_file, path_pubkey_user, &wrap_pos, &iv_pos);
+    ret = find_wrap_key_in_file(input_file, path_pubkey_user, &wrap_pos, &iv_pos);
     if(ret != 0)
     {
         printf("Failed to find public key in ciphered file\n");

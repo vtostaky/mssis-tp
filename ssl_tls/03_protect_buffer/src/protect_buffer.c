@@ -86,7 +86,7 @@ int protect_buffer(unsigned char **output, int *output_len,
     unsigned char IV[IV_SZ];
     unsigned char aes_key[HASH_SZ];
     unsigned char hash_key[HASH_SZ];
-    unsigned char* padded_input;
+    unsigned char* padded_input = NULL;
     unsigned char hmac_hash[HASH_SZ];
 
     mbedtls_sha256_context sha256_ctx;
@@ -107,8 +107,15 @@ int protect_buffer(unsigned char **output, int *output_len,
 
     *output_len = SALT_SZ + IV_SZ + (input_len/BLOCK_SZ + 1)*BLOCK_SZ + HASH_SZ;
 
-    *output = (unsigned char*)malloc(*output_len*sizeof(unsigned char*));
-    padded_input = (unsigned char*)malloc(padded_input_len*sizeof(unsigned char));
+    *output = (unsigned char*)malloc(*output_len * sizeof(unsigned char));
+    if(*output == NULL)
+        goto cleanup;
+    secure_memzero(*output, *output_len);
+    
+    padded_input = (unsigned char*)malloc(padded_input_len * sizeof(unsigned char));
+    if(padded_input == NULL)
+        goto cleanup;
+    secure_memzero(padded_input, padded_input_len);
 
     memcpy(padded_input, input, input_len);
 
@@ -156,9 +163,11 @@ int protect_buffer(unsigned char **output, int *output_len,
     
     mbedtls_md_free(&hmac_ctx);
 
-    free(padded_input);
     ret = 0;
 cleanup:
+    if(padded_input != NULL)
+        secure_memzero(padded_input, padded_input_len);
+    free(padded_input);
     return ret;
 }
 
@@ -185,7 +194,10 @@ int unprotect_buffer(unsigned char **output, int *output_len,
     }
     *output_len = input_len - (SALT_SZ + IV_SZ + HASH_SZ);
 
-    *output = (unsigned char*)malloc(*output_len*sizeof(unsigned char*));
+    *output = (unsigned char*)malloc(*output_len * sizeof(unsigned char));
+    if(*output == NULL)
+        goto cleanup;
+    secure_memzero(*output, *output_len);
     
     memcpy(salt, input, SALT_SZ);
     memcpy(IV, input + SALT_SZ, IV_SZ);

@@ -20,7 +20,7 @@ SRC 			= 	$(wildcard $(SRC_DIR)/*.c)
 OBJ 			= 	$(SRC:.c=.o)
 OBJ 			:= 	$(notdir $(OBJ))
 ## 
-EXE 			= 	cipher_multi_users
+EXE 			= 	multi_protect
 
 #################################################
 ##

@@ -10,8 +10,8 @@ int main(int argc, char **argv)
     unsigned char master_key[HASH_SZ];
     unsigned char salt[SALT_SZ];
 
-    unsigned char* output;
-    unsigned char* unciphered;
+    unsigned char* output = NULL;
+    unsigned char* unciphered = NULL;
     int output_len;
     int unciphered_len;
 
@@ -44,9 +44,7 @@ int main(int argc, char **argv)
                 {
                     print_hex(unciphered, unciphered_len, "Decrypted text");
                     print_char(unciphered, unciphered_len, "Decrypted text");
-                    free(unciphered);
                 }
-                free(output);
             }
             else
             {
@@ -62,5 +60,11 @@ int main(int argc, char **argv)
         ret = 0;
     }
 exit:
+    if(output != NULL)
+        secure_memzero(output, output_len);
+    if(unciphered != NULL)
+        secure_memzero(unciphered, unciphered_len);
+    free(output);
+    free(unciphered);
     return ret;
 }

@@ -71,12 +71,15 @@ int cipher_buffer(unsigned char **output, int *output_len,
 
     if(*output == NULL)
         goto cleanup;
+    secure_memzero(*output, *output_len);
 
     memcpy(*output, IV, IV_SZ);
     
     padded_input = (unsigned char*)malloc(padded_input_len*sizeof(unsigned char));
     if(padded_input == NULL)
         goto cleanup;
+    secure_memzero(padded_input, padded_input_len);
+    
     memcpy(padded_input, input, input_len);
     padded_input[input_len] = 0x80;
     for(i = input_len + 1; i < padded_input_len; i++)
@@ -183,6 +186,7 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     *output = malloc((*output_len)*sizeof(unsigned char));
     if(*output == NULL)
         goto cleanup;
+    secure_memzero(*output, *output_len);
  
     mbedtls_pk_init(&rsa_ctx);
 
