@@ -23,6 +23,16 @@ int protect_buffer(unsigned char **output, int *output_len,
         unsigned char *master_key, int key_len,
         unsigned char *salt, int salt_len);
 
+/**
+ * @param [out] output      unciphered buffer
+ * @param [in]  output_len  unciphered buffer length in bytes      
+ * @param [in]  input       ciphered buffer
+ * @param [in]  input_len   ciphered buffer length in bytes
+ * @param [in]  master_key  master key (km)
+ * @param [in]  key_len     master key length in bytes
+ * @param [in]  salt_len    salt length in bytes
+ * @return      0 if OK, 1 else
+ */
 int unprotect_buffer(unsigned char **output, int *output_len,
         unsigned char *input, int input_len,
         unsigned char *master_key, int key_len,
@@ -36,8 +46,12 @@ int unprotect_buffer(unsigned char **output, int *output_len,
  * @param [in]  iterations  number of iterations
  * @return      0 if OK, 1 else
  */
-
 int deriv_passwd(unsigned char *key, char* passwd, unsigned char* salt, int salt_len, unsigned int iterations);
 
+/**
+ * @param [out] alea            buffer for the alea to be generated
+ * @param [in]  alea_length     length of the expected alea
+ * @return      0 if OK, 1 else
+ */
 int gen_alea(unsigned char *alea, int alea_length);
 #endif

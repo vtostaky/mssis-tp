@@ -31,34 +31,31 @@ int main(int argc, char **argv)
         goto exit;
     }
 
-    if(master_key != NULL)
+    if(deriv_passwd(master_key, argv[1], salt, SALT_SZ, MAX_ITER ) == 0)
     {
-        if(deriv_passwd(master_key, argv[1], salt, SALT_SZ, MAX_ITER ) == 0)
+        print_hex(master_key, HASH_SZ, "master key");
+        print_hex(salt, SALT_SZ, "salt");
+        if(protect_buffer(&output, &output_len, (unsigned char*)input, input_len, master_key, HASH_SZ, salt, SALT_SZ) == 0)
         {
-            print_hex(master_key, HASH_SZ, "master key");
-            print_hex(salt, SALT_SZ, "salt");
-            if(protect_buffer(&output, &output_len, (unsigned char*)input, input_len, master_key, HASH_SZ, salt, SALT_SZ) == 0)
+            print_hex(output, output_len, "Encrypted text");
+            if(unprotect_buffer(&unciphered, &unciphered_len, (unsigned char*)output, output_len, master_key, HASH_SZ, SALT_SZ) == 0)
             {
-                print_hex(output, output_len, "Encrypted text");
-                if(unprotect_buffer(&unciphered, &unciphered_len, (unsigned char*)output, output_len, master_key, HASH_SZ, SALT_SZ) == 0)
-                {
-                    print_hex(unciphered, unciphered_len, "Decrypted text");
-                    print_char(unciphered, unciphered_len, "Decrypted text");
-                }
-            }
-            else
-            {
-                printf("Could not encrypt buffer!\n");
-                goto exit;
+                print_hex(unciphered, unciphered_len, "Decrypted text");
+                print_char(unciphered, unciphered_len, "Decrypted text");
             }
         }
         else
         {
-            printf("Could not derviate password!\n");
+            printf("Could not encrypt buffer!\n");
             goto exit;
         }
-        ret = 0;
     }
+    else
+    {
+        printf("Could not derviate password!\n");
+        goto exit;
+    }
+    ret = 0;
 exit:
     if(output != NULL)
         secure_memzero(output, output_len);

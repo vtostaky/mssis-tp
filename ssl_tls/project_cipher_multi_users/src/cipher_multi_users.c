@@ -9,6 +9,29 @@
 #include "mbedtls/rsa.h"
 #include "mbedtls/havege.h"
 
+/**
+ * Cipher AES key using given user public key, and put the result into output file.
+ * Put sha256 of the user public key into the output file.
+ * @param [out]     output_file         output file
+ * @param [in]      path_pubkey_user    path to the user public key file
+ * @param [in]      aes_key             the AES key to be ciphered
+ * @param [in]      sha256_ctx          the context used for global hash computation
+ * @return      0 if OK, 1 else
+ */
+static int cipher_user_key(FILE *output_file, char *path_pubkey_user,
+        unsigned char *aes_key,
+        mbedtls_sha256_context *sha256_ctx);
+/**
+ * Search in the given input file for a hash corresponding to given public key.
+ * Position of wrap key and position of IV are retrieved as outputs of this function.
+ * @param [in]      input_file          input file
+ * @param [in]      path_pubkey_user    path to the user public key file
+ * @param [out]     wrap_pos            the position of the wrap key in the input file
+ * @param [out]     iv_pos              the position of the IV in the input file
+ * @return      0 if OK, 1 else
+ */
+static int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wrap_pos, long int *iv_pos);
+
 int gen_alea(unsigned char *alea, int alea_length)
 {
     int ret = 1;
@@ -50,7 +73,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
     
     secure_memzero(pubBuffer, RSA_SZ*8);
 
-    //RSA encrypt
+    //Parse public key used for RSA encryption, and put it to a buffer
     mbedtls_pk_init(&pk_ctx);
 
     if( ( ret = mbedtls_pk_parse_public_keyfile( &pk_ctx, path_pubkey_user ) ) != 0 )
@@ -65,7 +88,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
         printf( " failed\n  ! mbedtls_pk_write_pubkey_pem failed with -0x%0x\n", -ret );
         goto cleanup;
     }
-
+    //Write "0x00" marker into the output file
     ret = fwrite (&c, sizeof(char), 1, output_file);
     if(ret != 1)
     {
@@ -75,6 +98,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
     }
     mbedtls_sha256_update( sha256_ctx, (unsigned char*)&c, 1);
 
+    //Compute sha256 hash of the public key, and write it into the output file
     mbedtls_sha256((const unsigned char *)pubBuffer, RSA_SZ*8, hash, 0);    
     ret = fwrite (hash , sizeof(char), HASH_SZ, output_file);
     if(ret != HASH_SZ)
@@ -85,6 +109,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
     }
     mbedtls_sha256_update( sha256_ctx, hash, HASH_SZ);
     
+    //Perform RSA encryption of the AES key, into a wrap key
     rsa_ctx = mbedtls_pk_rsa(pk_ctx);
     mbedtls_rsa_set_padding( rsa_ctx, MBEDTLS_RSA_PKCS_V21, md_type );
     
@@ -104,6 +129,7 @@ int cipher_user_key(FILE *output_file, char *path_pubkey_user,
         goto cleanup;
     }
 
+    //Write the wrap key into the output file
     ret = fwrite (wrap_key , sizeof(char), RSA_SZ, output_file);
     if(ret != RSA_SZ)
     {
@@ -183,10 +209,11 @@ int cipher_file(char *path_input_file, char *path_output_file,
         goto cleanup;
     secure_memzero(output, MAX_READ_SIZE);
 
-    
+    //sha256 of the output file will be computed and updated each time a new entry is written to the output file    
     mbedtls_sha256_init( &sha256_ctx );
     mbedtls_sha256_starts( &sha256_ctx, 0 );
 
+    //Generate AES key
     if(gen_alea(aes_key, HASH_SZ) != 0)
     {   
         printf("Could not generate aes key!\n");
@@ -195,6 +222,7 @@ int cipher_file(char *path_input_file, char *path_output_file,
     
     print_hex(aes_key, HASH_SZ, "AES key");
 
+    //Cipher AES key with each public key given to the executable
     for(i = 0; i < nb_users; i++)
     {
         if(paths_pubkey_users[i] != NULL)
@@ -207,6 +235,7 @@ int cipher_file(char *path_input_file, char *path_output_file,
             goto cleanup;
     }
     
+    //Write "0x01" marker into the output file
     ret = fwrite (&c, sizeof(char), 1, output_file);
     if(ret != 1)
     {
@@ -216,6 +245,7 @@ int cipher_file(char *path_input_file, char *path_output_file,
     }
     mbedtls_sha256_update( &sha256_ctx, (unsigned char*)&c, 1);
     
+    //Generate IV and write it into the output file
     if(gen_alea(IV, IV_SZ) != 0)
     {   
         printf("Could not generate IV!\n");
@@ -235,9 +265,9 @@ int cipher_file(char *path_input_file, char *path_output_file,
     mbedtls_aes_init(&aes_ctx);
     mbedtls_aes_setkey_enc(&aes_ctx, aes_key, 256);
 
+    //AES encryption of the input file into the output file, using 8kB size buffers
     while(!end_of_file)
     {
-        // copy 8kB file part into input buffer:
         input_len = fread (padded_input, sizeof(char), MAX_READ_SIZE, input_file);
         if (input_len < MAX_READ_SIZE)
         {
@@ -272,7 +302,8 @@ int cipher_file(char *path_input_file, char *path_output_file,
     mbedtls_aes_free(&aes_ctx);
 
     mbedtls_pk_init(&pk_ctx);
-    
+
+    //Compute RSA signature of the calculated hash, which represents the current output file content
     if( ( ret = mbedtls_pk_parse_keyfile( &pk_ctx, path_privkey_sign, NULL ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_keyfile returned -0x%04x\n", -ret );
@@ -295,6 +326,7 @@ int cipher_file(char *path_input_file, char *path_output_file,
         goto cleanup;
     }
 
+    //Write signature into output file
     ret = fwrite (sig , sizeof(char), RSA_SZ, output_file);
     if(ret != RSA_SZ)
     {
@@ -329,7 +361,7 @@ cleanup:
 int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wrap_pos, long int *iv_pos)
 {
     unsigned char hash_from_key[HASH_SZ];
-    unsigned char hash_from_buffer[HASH_SZ];
+    unsigned char hash_from_file[HASH_SZ];
     unsigned char wrap_key[RSA_SZ];
     unsigned char *pubBuffer = (unsigned char*)malloc(RSA_SZ*8*sizeof(unsigned char));
     char c;
@@ -343,7 +375,7 @@ int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wr
     
     rewind(input_file);
 
-    //RSA encrypt
+    //Parse user public key and put it into a buffer
     mbedtls_pk_init(&pk_ctx);
 
     if( ( ret = mbedtls_pk_parse_public_keyfile( &pk_ctx, path_pubkey_user ) ) != 0 )
@@ -360,27 +392,30 @@ int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wr
     }
     mbedtls_pk_free(&pk_ctx);
     
+    //Compute sha256 hash of the buffer
     mbedtls_sha256((const unsigned char *)pubBuffer, RSA_SZ*8, hash_from_key, 0);    
 
+    //Search for matching hash in the file
     while(1)
     {
         ret = fread(&c, sizeof(char), 1, input_file); 
         if(c != 0x00 || ret != 1)
         {
-            printf("No matching signature found\n");
+            printf("No matching hash found\n");
             goto cleanup;
         }
 
-        ret = fread(hash_from_buffer, sizeof(char), HASH_SZ, input_file); 
+        ret = fread(hash_from_file, sizeof(char), HASH_SZ, input_file); 
         if (ret != HASH_SZ)
         {
             printf ("Hash read error\n");
             goto cleanup;
         }
 
-        if(memcmp(hash_from_buffer, hash_from_key, HASH_SZ) == 0)
+        if(memcmp(hash_from_file, hash_from_key, HASH_SZ) == 0)
         {
             printf("Found correct key!\n");
+            //Save wrap key position
             *wrap_pos = ftell(input_file);
             fseek( input_file, RSA_SZ, SEEK_CUR );
             break;
@@ -389,6 +424,7 @@ int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wr
         fseek( input_file, RSA_SZ, SEEK_CUR );
     }
 
+    //Look for IV in the input file
     while(1)
     {
         ret = fread(&c, sizeof(char), 1, input_file); 
@@ -399,6 +435,7 @@ int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wr
         }
         if(c == 0x01)
         {
+            //Save IV position
             *iv_pos = ftell(input_file);
             break;
         }
@@ -409,7 +446,7 @@ int find_wrap_key_in_file(FILE *input_file, char *path_pubkey_user, long int *wr
 cleanup:
     secure_memzero(wrap_key, RSA_SZ);
     secure_memzero(hash_from_key, HASH_SZ);
-    secure_memzero(hash_from_buffer, HASH_SZ);
+    secure_memzero(hash_from_file, HASH_SZ);
     if(pubBuffer != NULL)
         secure_memzero(pubBuffer, RSA_SZ*8);
     free(pubBuffer);
@@ -489,7 +526,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
         goto cleanup;
     secure_memzero(output, MAX_READ_SIZE);
 
-    //Set position to signature
+    //Go to signature position
     fseek ( input_file , input_len - RSA_SZ , SEEK_SET );
     ret = fread(sig, sizeof(char), RSA_SZ, input_file); 
     if (ret != RSA_SZ)
@@ -500,6 +537,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
 
     mbedtls_pk_init(&pk_ctx);
 
+    //Parse the public key to be used for signing
     if( ( ret = mbedtls_pk_parse_public_keyfile( &pk_ctx, path_pubkey_sign ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_public_keyfile returned -0x%04x\n", -ret );
@@ -521,9 +559,10 @@ int uncipher_file(char *path_input_file, char *path_output_file,
     mbedtls_sha256_init( &sha256_ctx );
     mbedtls_sha256_starts( &sha256_ctx, 0 );
 
+    //Read the input file until we reach signature position
+    //Compute new signature using 8kB buffer steps.
     while(total_read < input_len - RSA_SZ)
     {
-        // copy 8kB file part into input buffer:
         read_input_len = fread (input, sizeof(char), MAX_READ_SIZE, input_file);
         total_read += read_input_len;
         
@@ -535,6 +574,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
     mbedtls_sha256_finish( &sha256_ctx, hash);
     mbedtls_sha256_free(&sha256_ctx);
     
+    //Verify signature
     if( ( ret = mbedtls_rsa_rsassa_pss_verify( rsa_ctx, mbedtls_havege_random, &hs, MBEDTLS_RSA_PUBLIC, md_type, 32, hash, sig ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_rsa_rsassa_pss_verify returned -0x%0x\n\n", -ret );
@@ -543,13 +583,15 @@ int uncipher_file(char *path_input_file, char *path_output_file,
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&pk_ctx);
 
+    //Find the hash of the user public key in the file, if present.
     ret = find_wrap_key_in_file(input_file, path_pubkey_user, &wrap_pos, &iv_pos);
     if(ret != 0)
     {
         printf("Failed to find public key in ciphered file\n");
         goto cleanup;
     }
-    
+   
+    //Go to wrap key position, and extract it
     fseek ( input_file , wrap_pos , SEEK_SET );
 
     ret = fread(wrap_key, sizeof(char), RSA_SZ, input_file); 
@@ -560,6 +602,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
         goto cleanup;
     }
 
+    //Go to IV position, and extract it
     fseek ( input_file , iv_pos , SEEK_SET );
     expected_output_len = input_len - RSA_SZ - iv_pos - IV_SZ;
     
@@ -573,7 +616,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
     print_hex(IV, IV_SZ, "IV");
     
     mbedtls_pk_init(&pk_ctx);
-    
+    //Parse private key file to decrypt wrap key
     if( ( ret = mbedtls_pk_parse_keyfile( &pk_ctx, path_privkey_user, NULL ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_keyfile returned -0x%04x\n", -ret );
@@ -588,7 +631,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
         printf( " failed\n  ! mbedtls_rsa_check_privkey failed with -0x%0x\n", -ret );
         goto cleanup;
     }
-    
+    //Uncipher wrap key, and get AES key as a result
     mbedtls_havege_init( &hs );
     ret = mbedtls_rsa_rsaes_oaep_decrypt( rsa_ctx, mbedtls_havege_random,
             &hs, MBEDTLS_RSA_PRIVATE, NULL, 0,
@@ -607,10 +650,10 @@ int uncipher_file(char *path_input_file, char *path_output_file,
     mbedtls_aes_setkey_dec(&aes_ctx, aes_key, RSA_SZ);
 
     total_read = 0;
+    //Decrypt AES encrypted part of input file, using 8kB size buffer.
     while(total_read < expected_output_len)
     {
         secure_memzero(output, MAX_READ_SIZE);
-        // copy 8kB file part into input buffer:
         read_input_len = fread (input, sizeof(char), MAX_READ_SIZE, input_file);
         total_read += read_input_len;
         
@@ -624,6 +667,7 @@ int uncipher_file(char *path_input_file, char *path_output_file,
                 input,
                 output );
 
+        //When decryption is over, remove padding
         if(total_read > expected_output_len)
         {
             for(i = read_input_len; i > 0; i--)

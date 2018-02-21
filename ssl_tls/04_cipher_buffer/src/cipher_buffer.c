@@ -54,12 +54,14 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
  
+    //Generate input vector
     if(gen_alea(IV, IV_SZ) != 0)
     {   
         printf("Could not generate IV!\n");
         goto cleanup;
     }
 
+    //Generate AES key
     if(gen_alea(aes_key, HASH_SZ) != 0)
     {   
         printf("Could not generate aes key!\n");
@@ -73,8 +75,10 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     secure_memzero(*output, *output_len);
 
+    //Copy generated IV into output buffer
     memcpy(*output, IV, IV_SZ);
-    
+
+    //Prepare input for encryption    
     padded_input = (unsigned char*)malloc(padded_input_len*sizeof(unsigned char));
     if(padded_input == NULL)
         goto cleanup;
@@ -88,6 +92,7 @@ int cipher_buffer(unsigned char **output, int *output_len,
     }
     
     print_hex(aes_key, HASH_SZ, "AES key");
+    //AES encryption of input buffer into output buffer
     mbedtls_aes_init(&aes_ctx);
     mbedtls_aes_setkey_enc(&aes_ctx, aes_key, RSA_SZ);
 
@@ -99,7 +104,7 @@ int cipher_buffer(unsigned char **output, int *output_len,
                     *output + IV_SZ + RSA_SZ );
     mbedtls_aes_free(&aes_ctx);
 
-    //RSA encrypt
+    //RSA encryption of the AES public key
     mbedtls_pk_init(&rsa_ctx);
 
     if( ( ret = mbedtls_pk_parse_public_keyfile( &rsa_ctx, path_pubkey_enc ) ) != 0 )
@@ -117,13 +122,16 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
 
+    //Copy encrypted AES key (wrap key) into output buffer, before AES encrypted content
     memcpy(*output + IV_SZ, wrap_key, olen); 
     mbedtls_havege_free( &hs );
     mbedtls_pk_free(&rsa_ctx);
 
+    //Compute hash of the output buffer
     mbedtls_sha256((const unsigned char *)*output, *output_len - RSA_SZ, hash, 0);    
     mbedtls_pk_init(&rsa_ctx);
     
+    //Sign computed hash
     if( ( ret = mbedtls_pk_parse_keyfile( &rsa_ctx, path_privkey_sign, NULL ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_keyfile returned -0x%04x\n", -ret );
@@ -139,6 +147,7 @@ int cipher_buffer(unsigned char **output, int *output_len,
         goto cleanup;
     }
 
+    //Place signature at the end of output buffer
     memcpy(*output + *output_len - RSA_SZ, sig, siglen); 
     
     mbedtls_pk_free(&rsa_ctx);
@@ -159,8 +168,8 @@ cleanup:
 
 int uncipher_buffer(unsigned char **output, int *output_len,
         unsigned char *input, int input_len,
-        char *path_pubkey_enc,
-        char *path_privkey_sign)
+        char *path_pubkey_sign,
+        char *path_privkey_dec)
 {
     int ret = 1;
     int i;
@@ -177,7 +186,7 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     mbedtls_md_type_t md_type = MBEDTLS_MD_SHA256;
     mbedtls_havege_state hs;
 
-    if((output == NULL) || (output_len == NULL) || (input == NULL) || (input_len < 1) || (path_pubkey_enc == NULL) || (path_privkey_sign == NULL))
+    if((output == NULL) || (output_len == NULL) || (input == NULL) || (input_len < 1) || (path_pubkey_sign == NULL) || (path_privkey_dec == NULL))
     {
         goto cleanup;
     }
@@ -190,12 +199,13 @@ int uncipher_buffer(unsigned char **output, int *output_len,
  
     mbedtls_pk_init(&rsa_ctx);
 
-    if( ( ret = mbedtls_pk_parse_public_keyfile( &rsa_ctx, path_pubkey_enc ) ) != 0 )
+    if( ( ret = mbedtls_pk_parse_public_keyfile( &rsa_ctx, path_pubkey_sign ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_public_keyfile returned -0x%04x\n", -ret );
         goto cleanup;
     }
     
+    //Extract signature from buffer and compare it to computed one
     memcpy(sig, input + input_len - RSA_SZ, RSA_SZ);  
     mbedtls_sha256(input, input_len - RSA_SZ, hash, 0);    
     if( ( ret = mbedtls_pk_verify( &rsa_ctx, md_type,
@@ -207,12 +217,14 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     }
     mbedtls_pk_free(&rsa_ctx);
 
+    //Extract IV from input buffer
     memcpy(IV, input, IV_SZ);
     
     mbedtls_pk_init(&rsa_ctx);
+    //Extract wrap key from input buffer
     memcpy(wrap_key, input + IV_SZ, RSA_SZ);
-    
-    if( ( ret = mbedtls_pk_parse_keyfile( &rsa_ctx, path_privkey_sign, NULL ) ) != 0 )
+    //RSA decrypt wrap key into AES key
+    if( ( ret = mbedtls_pk_parse_keyfile( &rsa_ctx, path_privkey_dec, NULL ) ) != 0 )
     {
         printf( " failed\n  ! mbedtls_pk_parse_keyfile returned -0x%04x\n", -ret );
         goto cleanup;
@@ -231,6 +243,7 @@ int uncipher_buffer(unsigned char **output, int *output_len,
     mbedtls_pk_free(&rsa_ctx);
 
     print_hex(aes_key, HASH_SZ, "AES key");
+    //AES decrypt input buffer into output buffer
     mbedtls_aes_init(&aes_ctx);
     mbedtls_aes_setkey_dec(&aes_ctx, aes_key, RSA_SZ);
 
@@ -242,6 +255,7 @@ int uncipher_buffer(unsigned char **output, int *output_len,
                     *output );
     mbedtls_aes_free(&aes_ctx);
     
+    //Remove padding
     for(i = *output_len; i > 0; i--)
     {
         if((*output)[i-1] == 0x80)
