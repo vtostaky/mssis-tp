@@ -1,0 +1,23 @@
+line 10 :
+    enable secret 5 $1$L7N7$vXueqkVC4TtkkEzggjwDN.
+    -> salted md5
+    -> openssl passwd -1 -salt L7N7 redanet
+line 11 :
+    enable password 7 010103005A05031B
+    -> Cisco proprietary method
+    -> redanet
+line 51 :
+    ppp chap password 7 0303590E505D375E
+    -> Cisco proprietary method
+    -> gbe62vr
+line 52 :
+    ppp pap sent-username fti/3xXXXXX@fti password 7 050C040A771E581B
+    -> Cisco proprietary method
+    -> gbe62vr
+line 69 :
+    snmp-server community public RO
+    -> non-encrypted default password : "public"
+line 89 :
+    password 7 105C0C1D0419171F
+    -> Cisco proprietary method
+    -> 7`yNRSW 

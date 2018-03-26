@@ -1,0 +1,92 @@
+
+!
+version 12.0
+service timestamps debug uptime
+service timestamps log uptime
+service password-encryption
+!
+hostname Polix
+!
+enable secret 5 $1$L7N7$vXueqkVC4TtkkEzggjwDN.
+enable password 7 010103005A05031B
+!
+!
+!
+!
+!
+ip subnet-zero
+ip name-server 194.2.0.20
+ip name-server 194.2.0.50
+!
+!
+!
+!
+interface Ethernet0
+ ip address 194.XX.XXX.X 255.255.255.0
+ no ip directed-broadcast
+ ip nat inside
+ no cdp enable
+!
+interface ATM0
+ no ip address
+ no ip directed-broadcast
+ atm vc-per-vp 4096
+ no atm ilmi-keepalive
+ pvc 2/32 
+  ubr 320
+  encapsulation aal5mux ppp dialer
+  dialer pool-member 1
+ !
+!
+interface Dialer0
+ description ISP
+ ip address negotiated
+ no ip directed-broadcast
+ ip nat outside
+ encapsulation ppp
+ dialer pool 1
+ dialer-group 1
+ ppp authentication chap pap callin
+ ppp chap hostname fti/3xXXXXX@fti
+ ppp chap password 7 0303590E505D375E
+ ppp pap sent-username fti/3xXXXXX@fti password 7 050C040A771E581B
+!
+ip nat translation tcp-timeout never
+ip nat translation udp-timeout never
+ip nat translation finrst-timeout never
+ip nat translation syn-timeout never
+ip nat translation dns-timeout never
+ip nat translation icmp-timeout never
+ip nat inside source list 10 interface Dialer0 overload
+ip classless
+ip route 0.0.0.0 0.0.0.0 Dialer0
+ip http server
+!
+access-list 10 permit any
+access-list 100 permit ip any any
+dialer-list 10 protocol ip list 100
+snmp-server engineID local 0000000902000030942C56BD
+snmp-server community public RO
+banner motd   
+           \\\\///
+          (/ @ @ /)
+________oOOo_(_)_oOOo________________________________
+
+        ATTENTION, NOUS  VOUS  SURVEILLONS
+
+         ooooO          Acces restraint sous controle
+         (   )Ooooo     du service informatique 
+__________\ (_(   )___________________________________
+           \_) ) /
+              (_/
+
+
+!
+line con 0
+ login
+ transport input none
+line vty 0 4
+ password 7 105C0C1D0419171F
+ login
+!
+end
