@@ -1,0 +1,41 @@
+policy_module(test,1.0.0)
+
+type toto_exec_t;
+type toto_t;
+require {
+	type staff_t;
+	type var_t;
+	role staff_r;
+	type null_device_t;
+	type root_t;
+	type usr_t;
+	type lib_t;
+	type etc_t;
+	type user_devpts_t;
+	type init_t;
+	type ld_so_cache_t;
+	type ld_so_t;
+};
+
+role staff_r types toto_t;
+allow staff_t toto_exec_t:file { execute execute_no_trans getattr read open };
+type_transition staff_t toto_exec_t:process toto_t;
+allow staff_t toto_t: process { transition rlimitinh siginh noatsecure };
+allow toto_t toto_exec_t: file { entrypoint read };
+allow toto_t null_device_t:chr_file { read write open };
+allow toto_t staff_t: process { sigchld };
+allow toto_t staff_t: fd { use };
+allow toto_t root_t: dir { search };
+allow toto_t usr_t: dir { search };
+allow toto_t lib_t: dir { search getattr };
+allow toto_t lib_t: lnk_file { read };
+allow toto_t user_devpts_t: chr_file { read write getattr};
+allow toto_t etc_t: dir { search };
+allow toto_t lib_t: file { read open getattr execute };
+allow toto_t init_t: process { sigchld };
+allow toto_t ld_so_cache_t: file {read open getattr execute}; 
+allow init_t toto_t: dir { search };
+allow toto_t ld_so_t: file { read};
+
+#exemple de logs du fichier /var/log/audit/audit.log
+#type=AVC msg=audit(1519142833.287:527): avc:  denied  { execute } for  pid=2329 comm="bash" name="toto" dev="sda1" ino=101464218 scontext=root:sysadm_r:sysadm_t:s0 tcontext=staff_u:object_r:var_t:s0 tclass=file

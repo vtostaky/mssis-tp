@@ -1,0 +1,32 @@
+[root@localhost ~]# semanage login -l
+
+Nom pour l'ouverture de session Identité SELinux     Intervalle MLS/MCS
+Service
+
+__default__          unconfined_u         s0-s0:c0.c1023       *
+root                 unconfined_u         s0-s0:c0.c1023       *
+system_u             system_u             s0-s0:c0.c1023       *
+
+[root@localhost ~]# id -Z
+unconfined_u:unconfined_r:unconfined_t:s0-s0:c0.c1023
+
+[root@localhost ~]# semanage user -l
+
+                Étiquetage MLS/       MLS/                          
+Identité SELinux Préfixe    Niveau MCS Intervalle MCS                 Rôles
+SELinux
+
+guest_u         user       s0         s0                             guest_r
+root            user       s0         s0-s0:c0.c1023                 staff_r
+sysadm_r system_r unconfined_r
+staff_u         user       s0         s0-s0:c0.c1023                 staff_r
+sysadm_r system_r unconfined_r
+sysadm_u        user       s0         s0-s0:c0.c1023                 sysadm_r
+system_u        user       s0         s0-s0:c0.c1023                 system_r
+unconfined_r
+unconfined_u    user       s0         s0-s0:c0.c1023                 system_r
+unconfined_r
+user_u          user       s0         s0                             user_r
+xguest_u        user       s0         s0                             xguest_r
+
+
