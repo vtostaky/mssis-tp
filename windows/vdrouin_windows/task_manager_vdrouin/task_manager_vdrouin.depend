@@ -1,0 +1,8 @@
+# depslib dependency file v1.0
+1518598170 source:c:\users\toto\task_manager_vdrouin\main.c
+	<stdio.h>
+	<stdlib.h>
+	<windows.h>
+	<TlHelp32.h>
+	<Psapi.h>
+
